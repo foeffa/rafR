@@ -128,6 +128,9 @@ classify_ABCD_adv <- function(df,cutoff_matrix,value,object,...) {
 
 # is het niet makkelijker om die columns een algemene naam te geven zodat ik ze makkelijk kan row_binden() ?
 # note: gaat ook uit van een 1:1 mapping ... (i.e. bij sales region dat een klant in transactions ook enkel bij 1 sales region hoort ...)
+
+# editen zodat er string gegeven kan woren (char vector) zoals in
+
 classify_ABCD_adv_long <- function(df,cutoff_matrix,value,object,...) {
   value <- enquo(value)
   object <- enquo(object)
