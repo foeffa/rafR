@@ -1,9 +1,10 @@
 library(tidyverse)
 library(magrittr)
-#
-# Percentile analysis ----
-#
+library(lubridate)
+library(stringr)
+library(DBI)
 
+# Standard analysis functions ----
 prep_df_exp <- function(df_input,dim_col,val_col) {
   all_cols <- c(dim_col,val_col)
   df_temp <- df_input %>%
@@ -169,4 +170,67 @@ classify_ABCD_adv_long <- function(df,cutoff_matrix,value,object,...) {
       "identifier_value" = !!object
     )
   return(df)
+}
+
+
+# Data read functions ----
+clean_col_names_old <- function(df) {
+  df %<>% rename_all(. %>% tolower %>% gsub(" ", "\\.",.) %>% gsub("-","\\.",.) %>% gsub("_","\\.",.))
+  return(df)
+}
+
+clean_col_names <- function(df) {
+  df %<>% rename_all(. %>% tolower %>% gsub("[^a-zA-Z0-9]","\\.",.) %>% gsub("[\\.]+","\\.",.))
+}
+
+# Use - main function interface
+read_files_with_spec <- function(filenames,spec_col_types) {
+  df <- filenames %>% map_dfr(.f = read_csv_with_filename_and_spec,spec_col_types) #%>%
+  #mutate(file.origin = filenames)
+  return(df)
+}
+
+# Use - helper function
+read_csv_with_filename_and_spec <- function(filename,spec) { # waarschijnlijk eleganter om deze functie on the fly te maken ... i.e. kan k hier parameters mappen of zo in list? check R for Data Science
+  read_csv(filename,col_types = spec) %>%
+    mutate(SKP.file.full.path = filename)
+}
+
+# Deprecated
+read_csv_with_filename <- function(filename) {
+  read_csv(filename) %>%
+    mutate(SKP.file.full.path = filename)
+}
+
+get_file_list <- function(main_dir,mask,...) {
+  import_dir <- file.path(main_dir,str_flatten(string = ...,collapse = "/"))
+  import_files <- list.files(import_dir,pattern = mask)
+  import_file_list_full <- paste(import_dir,import_files,sep="/")
+  return(import_file_list_full)
+}
+
+extract_filename_from_path <- function(filename,separator) {
+  detect_separators <- str_locate_all(filename,pattern=separator)
+  nr_instances_of_separator <- nrow(detect_separators[[1]])
+  last_part_start_position <- detect_separators[[1]][[nr_instances_of_separator]]
+  last_part_end_position = str_length(filename)
+  extracted_string = str_sub(filename,start = last_part_start_position+1, end = last_part_end_position)
+  return(extracted_string)
+}
+
+read_db_timed <- function(df,db_con) {
+  time_start <- Sys.time()
+  df <- DBI::dbReadTable(conn = db_con,name = df)
+  time_end <- Sys.time()
+  time_passed <- time_end - time_start
+  print(paste0("Data read time: ",time_passed))
+  return(df)
+}
+
+write_db_timed <- function(df,db_con) {
+  time_start <- Sys.time()
+  DBI::dbWriteTable(conn = db_con, name = df, value = eval(parse(text = df)), overwrite = TRUE, temporary = FALSE)
+  time_end <- Sys.time()
+  time_passed <- time_end - time_start
+  print(paste0("Data write time: ",time_passed))
 }
