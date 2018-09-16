@@ -234,3 +234,97 @@ write_db_timed <- function(df,db_con) {
   time_passed <- time_end - time_start
   print(paste0("Data write time: ",time_passed))
 }
+
+# BOXPLOT functions ----
+# AcTUAL FUNCTIONS ----
+generate_boxplot_passthrough <- function(df,x_axis,y_axis) { # remember to use x_axis and y_axis variables when banging !! :)
+  graph <- ggplot(data = df, aes(x = !!x_axis, y = !!y_axis)) + geom_boxplot(shape = 2, varwidth = T, na.rm = T) + theme_light() # OKAY!
+  return(graph)
+}
+
+
+generate_grouped_boxplots <- function(df,value,x_axis,...) { # OKAY!
+  grouping_var <- enquos(...)
+  value_col <- enquo(value)
+  x_axis_col <- enquo(x_axis)
+  grouped_plots <- df %>%
+    group_by(!!!grouping_var) %>%
+    nest(.key = "boxplot_data") %>%
+    mutate (
+      boxplot_model = map (
+        boxplot_data,
+        #~ggplot(data = .) + geom_boxplot(aes(x = product.level.2, y = discount.given.on.theoretical.revenue),outlier.colour = "red",outlier.shape = 2,outlier.alpha = 0.75, varwidth = T,na.rm = T) + theme_light() + coord_flip()
+        ~generate_boxplot_passthrough(.,x_axis_col,value_col)
+      )
+    )
+  return(grouped_plots)
+}
+
+write_boxplots <- function(plots) {
+  dimension_names <- plots %>%
+    select(-contains("boxplot")) %>%
+    unite(sep=" _ ",col = "file_name_initial")
+  print(dimension_names)
+  dimension_names_full <- dimension_names %>%
+    mutate(
+      file_name_initial = paste0(getwd(),"/",file_name_initial,".png")
+    )
+  print(dimension_names_full$file_name_initial)
+  #dimension_names_pasted <- dimension_names %>% select_all() %>% unite(sep=" | ")
+  # file_names <- paste0(dimension_names,".png")
+  # print(file_names)
+  map2(dimension_names_full$file_name_initial,plots$boxplot_model,ggsave)
+}
+
+# example usage: test_plots4 <- generate_grouped_boxplots(test_set,sales.net.margin.pct,customer.price.band,order.channel,sales.region) %>% write_boxplots()
+
+# Peer pricing by volume ----
+# check test_densityPPshizzle file voor violin plots die hier ook die percentiles van gebruiken
+prep_df_vol <- function(df_input,dim_col,margin_col,volume_col) {
+  all_cols <- c(dim_col,margin_col,volume_col)
+  print(all_cols)
+  df_temp <- df_input %>%
+    select(!!all_cols) %>%
+    rename(
+      "margin_col" = !!margin_col, # indicator
+      "volume_col" = !!volume_col
+    ) %>%
+    mutate(
+      margin_pct = margin_col / volume_col,
+      margin_col_rounded = round(margin_pct,2)
+    )
+  return(df_temp)
+}
+
+generate_percentiles_by_volume <- function(df,slice_yesno,...) {
+  dims <- rlang::syms(...)
+  df_aggregated_volume <- df %>%
+    group_by(!!!dims) %>%
+    summarise(
+      total_volume_for_dimension = sum(volume_col)
+    )
+
+  df %<>%
+    group_by(!!!dims,margin_col_rounded) %>%
+    summarise(
+      volume_at_pct_margin = sum(volume_col)
+    ) %>%
+    left_join(df_aggregated_volume) %>%
+    mutate(
+      pct_volume_of_dimension = volume_at_pct_margin / total_volume_for_dimension,
+      cum_pct_volume_of_dimension = cumsum(pct_volume_of_dimension)
+    ) %>%
+    mutate(
+      volume_quantile = findInterval(x = cum_pct_volume_of_dimension, vec = seq(from = 0.0, to = 1.0, by = 0.1)) # klopt want we kijken op welke marge Pxx van volume (sales) valt
+    )
+
+  if(slice_yesno == FALSE) {
+    return(df)
+  } else {
+    df %<>%
+      arrange(!!!dims,volume_quantile) %>%
+      group_by(!!!dims, volume_quantile) %>%
+      slice(1)
+    return(df)
+  }
+}
