@@ -56,6 +56,14 @@ generate_percentiles_sym <- function(df_input,...) {
 }
 
 # Aka "rank_within_segment_generalized_named_cumedist_classified" function in code_ABCD_rework_v0.2
+write_csv_named <- function(df, path) {
+  date <- today()
+  data <- deparse(substitute(df))
+  dir <- paste(getwd(),path,sep="/")
+  full_name <- paste0(dir,"/","[",date,"]",data,".csv")
+  print(full_name)
+  df %>% write_csv(path = full_name)
+}
 # Make sure to also load the ABCD mapping matrix (cutoff per interval)
 # And to supply interval_id for every bucket
 #   ABCD_cutoffs <- read_csv("Import/abcd_classification.csv")
